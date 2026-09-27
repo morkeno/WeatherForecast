@@ -65,6 +65,7 @@ public record MetForecastResponse(
     public record Details(
         @JsonProperty("air_temperature") Double airTemperature,
         @JsonProperty("wind_speed") Double windSpeed,
+        // NOTE: The following are possible details for future use.
         @JsonProperty("wind_from_direction") Double windFromDirection,
         @JsonProperty("relative_humidity") Double relativeHumidity,
         @JsonProperty("cloud_area_fraction") Double cloudAreaFraction,

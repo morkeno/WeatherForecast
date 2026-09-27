@@ -21,7 +21,7 @@ class MetClientLiveTest {
 
     @Test
     void fetchesForecastForOslo() {
-        MetForecastResponse response = metClient.getCompact(59.91, 10.75);
+        MetForecastResponse response = metClient.getCompactForecast(59.91, 10.75);
 
         assertThat(response).isNotNull();
         assertThat(response.properties()).isNotNull();

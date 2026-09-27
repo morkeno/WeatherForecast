@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.spond.weatherforecast.cache.InMemoryForecastCache;
 import org.spond.weatherforecast.client.dto.MetForecastResponse;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
@@ -14,7 +15,10 @@ import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.headerDoesNotExist;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 class MetClientCachingTest {
@@ -45,13 +49,65 @@ class MetClientCachingTest {
         MetClient client = new MetClient(
                 builder, new InMemoryForecastCache(), "https://example.test", "test-ua contact@example.com");
 
-        MetForecastResponse first = client.getCompact(59.91, 10.75);
-        MetForecastResponse second = client.getCompact(59.91, 10.75);
+        MetForecastResponse first = client.getCompactForecast(59.91, 10.75);
+        MetForecastResponse second = client.getCompactForecast(59.91, 10.75);
 
         // MockRestServiceServer expects exactly one request; the second call must hit the cache.
         server.verify();
         assertThat(first).isNotNull();
         assertThat(second).isSameAs(first);
+    }
+
+    @Test
+    void staleEntryIsRevalidatedWithExactLastModified() {
+        String lastModified = "Sun, 27 Sep 2026 12:00:00 GMT";
+
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+
+        // First response carries Last-Modified but no Expires, so it is never fresh.
+        HttpHeaders firstHeaders = new HttpHeaders();
+        firstHeaders.set(HttpHeaders.LAST_MODIFIED, lastModified);
+        server.expect(requestTo("https://example.test/compact?lat=59.91&lon=10.75"))
+                .andExpect(headerDoesNotExist(HttpHeaders.IF_MODIFIED_SINCE))
+                .andRespond(withSuccess(BODY, MediaType.APPLICATION_JSON).headers(firstHeaders));
+
+        // Second request must echo the exact previous Last-Modified as If-Modified-Since; MET answers 304.
+        server.expect(requestTo("https://example.test/compact?lat=59.91&lon=10.75"))
+                .andExpect(header(HttpHeaders.IF_MODIFIED_SINCE, lastModified))
+                .andRespond(withStatus(HttpStatus.NOT_MODIFIED));
+
+        MetClient client = new MetClient(
+                builder, new InMemoryForecastCache(), "https://example.test", "test-ua contact@example.com");
+
+        MetForecastResponse first = client.getCompactForecast(59.91, 10.75);
+        MetForecastResponse second = client.getCompactForecast(59.91, 10.75);
+
+        server.verify();
+        assertThat(second).isSameAs(first);
+    }
+
+    @Test
+    void entryWithoutExpiresIsTreatedAsStaleAndRevalidated() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+
+        // No Expires header on either response.
+        HttpHeaders firstHeaders = new HttpHeaders();
+        firstHeaders.set(HttpHeaders.LAST_MODIFIED, "Sun, 27 Sep 2026 12:00:00 GMT");
+        server.expect(requestTo("https://example.test/compact?lat=59.91&lon=10.75"))
+                .andRespond(withSuccess(BODY, MediaType.APPLICATION_JSON).headers(firstHeaders));
+        server.expect(requestTo("https://example.test/compact?lat=59.91&lon=10.75"))
+                .andRespond(withStatus(HttpStatus.NOT_MODIFIED));
+
+        MetClient client = new MetClient(
+                builder, new InMemoryForecastCache(), "https://example.test", "test-ua contact@example.com");
+
+        client.getCompactForecast(59.91, 10.75);
+        client.getCompactForecast(59.91, 10.75);
+
+        // Both calls hit MET: without Expires the cached entry is never fresh.
+        server.verify();
     }
 
     private static String rfc1123(Instant instant) {

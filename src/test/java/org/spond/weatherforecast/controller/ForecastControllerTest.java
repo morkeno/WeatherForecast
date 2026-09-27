@@ -36,7 +36,7 @@ class ForecastControllerTest {
         MetForecastResponse sample = objectMapper.readValue(
             new ClassPathResource("met-compact-sample.json").getInputStream(),
             MetForecastResponse.class);
-        given(metClient.getCompact(anyDouble(), anyDouble())).willReturn(sample);
+        given(metClient.getCompactForecast(anyDouble(), anyDouble())).willReturn(sample);
     }
 
     @Test

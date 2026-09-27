@@ -10,7 +10,6 @@ import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.time.OffsetDateTime;
-import java.time.ZoneId;
 import java.util.Comparator;
 import java.util.List;
 
@@ -19,8 +18,6 @@ import java.util.List;
  */
 @Service
 public class ForecastService {
-
-    private static final ZoneId EVENT_ZONE = ZoneId.of("Europe/Oslo");
 
     private final SpondEventService spondEventService;
     private final MetClient metClient;
@@ -42,10 +39,9 @@ public class ForecastService {
             throw new EventNotFoundException(eventId);
         }
 
-        MetForecastResponse response = metClient.getCompact(event.latitude(), event.longitude());
+        MetForecastResponse response = metClient.getCompactForecast(event.latitude(), event.longitude());
 
         OffsetDateTime eventTime = event.start()
-            .atZone(EVENT_ZONE)
             .toOffsetDateTime();
 
         return timeseries(response).stream()
@@ -58,12 +54,10 @@ public class ForecastService {
 
     private static List<MetForecastResponse.Timeseries> timeseries(MetForecastResponse response) {
         if (response == null || response.properties() == null
-            || response.properties()
-            .timeseries() == null) {
+            || response.properties().timeseries() == null) {
             return List.of();
         }
-        return response.properties()
-            .timeseries();
+        return response.properties().timeseries();
     }
 
     private static Forecast toForecast(MetForecastResponse.Timeseries entry) {

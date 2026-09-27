@@ -20,6 +20,7 @@ public class ForecastController {
     }
 
     /**
+     * NOTE: skipping Auth for now, but the given Event should be associated with a given token.
      * Returns a multi-day daily forecast for a coordinate.
      *
      * @param eventId  Spond Event ID (NOTE: assuming this contract exists)

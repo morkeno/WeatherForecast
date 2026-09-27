@@ -1,14 +1,19 @@
 package org.spond.weatherforecast.client;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.spond.weatherforecast.cache.CachedForecast;
 import org.spond.weatherforecast.cache.ForecastCache;
 import org.spond.weatherforecast.client.dto.MetForecastResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClient.RequestHeadersSpec.ConvertibleClientHttpResponse;
 import org.springframework.web.client.RestClientException;
 
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
@@ -27,6 +32,7 @@ import java.util.Optional;
 @Component
 public class MetClient {
 
+    private static final Logger log = LoggerFactory.getLogger(MetClient.class);
     private final RestClient restClient;
     private final ForecastCache cache;
 
@@ -46,7 +52,7 @@ public class MetClient {
     /**
      * Fetches the compact forecast for a coordinate.
      */
-    public MetForecastResponse getCompact(double lat, double lon) {
+    public MetForecastResponse getCompactForecast(double lat, double lon) {
         double roundedLat = truncate(lat);
         double roundedLon = truncate(lon);
         String key = roundedLat + "," + roundedLon;
@@ -56,6 +62,12 @@ public class MetClient {
             return cached.get().response();
         }
 
+        return requestCompact(key, roundedLat, roundedLon, cached);
+    }
+
+    private MetForecastResponse requestCompact(
+        String key, double roundedLat, double roundedLon, Optional<CachedForecast> cached) {
+
         return restClient.get()
             .uri(uriBuilder -> uriBuilder.path("/compact")
                 .queryParam("lat", roundedLat)
@@ -64,28 +76,51 @@ public class MetClient {
             .headers(headers -> cached
                 .map(CachedForecast::lastModified)
                 .ifPresent(lastModified -> headers.set(HttpHeaders.IF_MODIFIED_SINCE, lastModified)))
-            .exchange((request, response) -> {
-                int status = response.getStatusCode().value();
-                if (status == 304 && cached.isPresent()) {
-                    CachedForecast refreshed = new CachedForecast(
-                        cached.get().response(),
-                        expiresFrom(response.getHeaders()),
-                        lastModifiedFrom(response.getHeaders(), cached.get().lastModified()));
-                    cache.put(key, refreshed);
-                    return refreshed.response();
-                }
-                if (response.getStatusCode().is2xxSuccessful()) {
-                    MetForecastResponse body = response.bodyTo(MetForecastResponse.class);
-                    cache.put(key, new CachedForecast(
-                        body,
-                        expiresFrom(response.getHeaders()),
-                        response.getHeaders().getFirst(HttpHeaders.LAST_MODIFIED)));
-                    return body;
-                }
-                throw new RestClientException("MET API returned status " + status);
-            });
+            .exchange((request, response) -> handleResponse(key, cached, response));
     }
 
+    private MetForecastResponse handleResponse(
+        String key, Optional<CachedForecast> cached, ConvertibleClientHttpResponse response) throws IOException {
+
+        HttpStatusCode statusCode = response.getStatusCode();
+        int status = statusCode.value();
+
+        // Documentated by MET
+        if (status == 203) {
+            log.warn("MET API returned 203, contract might have changed.");
+        }
+
+        if (status == 304 && cached.isPresent()) {
+            return serveRevalidated(key, cached.get(), response.getHeaders());
+        }
+        if (statusCode.is2xxSuccessful()) {
+            return storeFresh(key, response);
+        }
+        throw new RestClientException("MET API returned status " + status);
+    }
+
+    /** 304 Not Modified: keep the cached body, refresh only its freshness metadata. */
+    private MetForecastResponse serveRevalidated(String key, CachedForecast cached, HttpHeaders headers) {
+        CachedForecast refreshed = new CachedForecast(
+            cached.response(),
+            expiresFrom(headers),
+            lastModifiedFrom(headers, cached.lastModified()));
+        cache.put(key, refreshed);
+        return refreshed.response();
+    }
+
+    /** Store the freshly downloaded body (read-through) and return it. */
+    private MetForecastResponse storeFresh(String key, ConvertibleClientHttpResponse response) {
+        MetForecastResponse body = response.bodyTo(MetForecastResponse.class);
+        HttpHeaders headers = response.getHeaders();
+        cache.put(key, new CachedForecast(
+            body,
+            expiresFrom(headers),
+            headers.getFirst(HttpHeaders.LAST_MODIFIED)));
+        return body;
+    }
+
+    /** MET's {@code Expires}, or {@code null} when absent — an entry with no expiry is treated as stale. */
     private static Instant expiresFrom(HttpHeaders headers) {
         long expires = headers.getExpires();
         return expires >= 0 ? Instant.ofEpochMilli(expires) : null;
