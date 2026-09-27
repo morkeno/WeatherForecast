@@ -1,14 +1,10 @@
 package org.spond.weatherforecast.model;
 
-import java.time.LocalDate;
-
 /**
- * A single day's weather forecast for a location.
+ * The weather forecast for an event
  */
 public record Forecast(
-        String location,
-        LocalDate date,
         double temperatureCelsius,
-        String summary
+        double windSpeedMs
 ) {
 }

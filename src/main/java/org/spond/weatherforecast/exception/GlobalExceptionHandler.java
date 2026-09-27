@@ -12,8 +12,8 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    @ExceptionHandler(ForecastNotFoundException.class)
-    public ProblemDetail handleNotFound(ForecastNotFoundException ex) {
+    @ExceptionHandler({ForecastNotFoundException.class, EventNotFoundException.class})
+    public ProblemDetail handleNotFound(RuntimeException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
     }
 

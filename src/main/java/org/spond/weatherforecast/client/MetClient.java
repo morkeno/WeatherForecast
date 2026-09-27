@@ -12,13 +12,6 @@ import java.math.RoundingMode;
 /**
  * Client for the MET Norway Locationforecast 2.0 "compact" product.
  *
- * <p>First increment: connect and fetch. It sends the identifying {@code User-Agent}
- * required by api.met.no (a missing/banned UA returns 403) and truncates
- * coordinates to 4 decimals (5+ decimals return 403).
- *
- * <p>Caching ({@code Expires} / {@code If-Modified-Since}) will be added in a
- * later increment.
- *
  * @see <a href="https://api.met.no/doc/TermsOfService">MET API terms of service</a>
  */
 @Component
@@ -40,9 +33,8 @@ public class MetClient {
     /**
      * Fetches the compact forecast for a coordinate.
      *
-     * @param altitude ground height in whole meters, or {@code null} to let MET decide
      */
-    public MetForecastResponse getCompact(double lat, double lon, Integer altitude) {
+    public MetForecastResponse getCompact(double lat, double lon) {
         double roundedLat = truncate(lat);
         double roundedLon = truncate(lon);
 
@@ -51,9 +43,6 @@ public class MetClient {
                 uriBuilder.path("/compact")
                     .queryParam("lat", roundedLat)
                     .queryParam("lon", roundedLon);
-                if (altitude != null) {
-                    uriBuilder.queryParam("altitude", altitude);
-                }
                 return uriBuilder.build();
             })
             .retrieve()

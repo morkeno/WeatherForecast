@@ -1,11 +1,11 @@
 package org.spond.weatherforecast.exception;
 
 /**
- * Thrown when no forecast is available for the requested location.
+ * Thrown when MET returns no forecast data for the requested coordinate.
  */
 public class ForecastNotFoundException extends RuntimeException {
 
-    public ForecastNotFoundException(String location) {
-        super("No forecast available for location: " + location);
+    public ForecastNotFoundException(double latitude, double longitude) {
+        super("No forecast available for coordinate: " + latitude + ", " + longitude);
     }
 }

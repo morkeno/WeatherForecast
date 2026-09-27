@@ -21,12 +21,12 @@ class MetClientLiveTest {
 
     @Test
     void fetchesForecastForOslo() {
-        MetForecastResponse response = metClient.getCompact(59.91, 10.75, null);
+        MetForecastResponse response = metClient.getCompact(59.91, 10.75);
 
         assertThat(response).isNotNull();
         assertThat(response.properties()).isNotNull();
         assertThat(response.properties().timeseries()).isNotEmpty();
-        assertThat(response.properties().timeseries().get(0).data().instant().details().airTemperature())
+        assertThat(response.properties().timeseries().getFirst().data().instant().details().airTemperature())
                 .isNotNull();
     }
 }

@@ -1,15 +1,11 @@
 package org.spond.weatherforecast.controller;
 
-import jakarta.validation.constraints.Max;
-import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotBlank;
 import org.spond.weatherforecast.model.Forecast;
 import org.spond.weatherforecast.service.ForecastService;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -26,14 +22,16 @@ public class ForecastController {
     }
 
     /**
-     * Returns a multi-day forecast for a location.
+     * Returns a multi-day daily forecast for a coordinate.
      *
-     * <p>Example: {@code GET /api/v1/forecast/oslo?days=5}
+     * <p>Example: {@code GET /api/v1/forecast?lat=59.91&lon=10.75&days=5}
+     *
+     * @param eventId  Spond Event ID (NOTE: assuming this contract exists)
      */
-    @GetMapping("/{location}")
-    public List<Forecast> getForecast(
-            @PathVariable @NotBlank String location,
-            @RequestParam(defaultValue = "3") @Min(1) @Max(14) int days) {
-        return forecastService.getForecast(location, days);
+    @GetMapping("/{eventId}")
+    public Forecast getForecast(
+        @PathVariable String eventId
+    ) {
+        return forecastService.getForecast(eventId);
     }
 }
