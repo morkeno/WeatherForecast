@@ -11,8 +11,6 @@ import java.util.stream.IntStream;
 /**
  * Provides weather forecasts.
  *
- * <p>This is a skeleton implementation that returns stubbed data. Replace the
- * body with a real data source (e.g. an external weather API or a database).
  */
 @Service
 public class ForecastService {
