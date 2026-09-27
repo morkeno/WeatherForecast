@@ -51,6 +51,24 @@ class ForecastServiceTest {
         assertThat(forecast.windSpeedMs()).isEqualTo(8.0);
     }
 
+    @Test
+    void resolvesEventUpToSevenDaysAhead() {
+        // Event ~7 days out; MET's compact series is 6-hourly that far ahead.
+        given(spondEventService.getEvent("far")).willReturn(new SpondEvent(59.91, 10.75,
+            ZonedDateTime.parse("2026-10-04T18:00:00Z"),
+            ZonedDateTime.parse("2026-10-04T20:00:00Z")));
+        given(metClient.getCompactForecast(anyDouble(), anyDouble())).willReturn(response(
+            entry("2026-09-27T12:00:00Z", 15.0, 5.0),
+            entry("2026-10-04T12:00:00Z", 12.0, 3.0),
+            entry("2026-10-04T18:00:00Z", 14.0, 2.4),
+            entry("2026-10-05T00:00:00Z", 9.0, 6.0)));
+
+        Forecast forecast = forecastService.getForecast("far");
+
+        assertThat(forecast.temperatureCelsius()).isEqualTo(14.0);
+        assertThat(forecast.windSpeedMs()).isEqualTo(2.4);
+    }
+
     private static MetForecastResponse response(MetForecastResponse.Timeseries... entries) {
         return new MetForecastResponse(null,
             new MetForecastResponse.Properties(null, List.of(entries)));
@@ -70,6 +88,20 @@ class ForecastServiceTest {
 
         assertThatThrownBy(() -> forecastService.getForecast("nope"))
             .isInstanceOf(EventNotFoundException.class);
+    }
+
+    @Test
+    void throwsWhenNoEntryNearEventTime() {
+        // Event is far beyond the available forecast entries (e.g. >10 days out).
+        given(spondEventService.getEvent("far")).willReturn(new SpondEvent(59.91, 10.75,
+            ZonedDateTime.parse("2026-11-01T12:00:00Z"),
+            ZonedDateTime.parse("2026-11-01T14:00:00Z")));
+        given(metClient.getCompactForecast(anyDouble(), anyDouble())).willReturn(response(
+            entry("2026-09-27T12:00:00Z", 15.0, 5.0),
+            entry("2026-10-05T00:00:00Z", 9.0, 6.0)));
+
+        assertThatThrownBy(() -> forecastService.getForecast("far"))
+            .isInstanceOf(ForecastNotFoundException.class);
     }
 
     @Test

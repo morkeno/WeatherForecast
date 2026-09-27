@@ -19,6 +19,9 @@ import java.util.List;
 @Service
 public class ForecastService {
 
+    /** Largest gap between an event and the nearest forecast entry we accept (MET is 6-hourly far out). */
+    private static final Duration MAX_MATCH_DISTANCE = Duration.ofHours(6);
+
     private final SpondEventService spondEventService;
     private final MetClient metClient;
 
@@ -44,12 +47,18 @@ public class ForecastService {
         OffsetDateTime eventTime = event.start()
             .toOffsetDateTime();
 
-        return timeseries(response).stream()
+        MetForecastResponse.Timeseries closest = timeseries(response).stream()
             .filter(entry -> entry.time() != null)
             .min(Comparator.comparing(entry -> Duration.between(entry.time(), eventTime)
                 .abs()))
-            .map(ForecastService::toForecast)
             .orElseThrow(() -> new ForecastNotFoundException(event.latitude(), event.longitude()));
+
+        // Guard against events outside MET's forecast range (too far ahead, or in the past).
+        if (Duration.between(closest.time(), eventTime).abs().compareTo(MAX_MATCH_DISTANCE) > 0) {
+            throw new ForecastNotFoundException(event.latitude(), event.longitude());
+        }
+
+        return toForecast(closest);
     }
 
     private static List<MetForecastResponse.Timeseries> timeseries(MetForecastResponse response) {
